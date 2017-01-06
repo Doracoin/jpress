@@ -21,6 +21,7 @@ import java.sql.DriverManager;
 import java.util.Enumeration;
 import java.util.List;
 
+import com.alibaba.druid.filter.stat.StatFilter;
 import com.jfinal.config.Constants;
 import com.jfinal.config.Handlers;
 import com.jfinal.config.Interceptors;
@@ -42,16 +43,16 @@ import com.jfinal.plugin.ehcache.EhCachePlugin;
 import com.jfinal.render.ViewType;
 
 import io.jpress.Consts;
+import io.jpress.cache.JCachePlugin;
 import io.jpress.core.cache.ActionCacheHandler;
-import io.jpress.core.db.DbDialect;
-import io.jpress.core.db.DbDialectFactory;
 import io.jpress.core.interceptor.HookInterceptor;
 import io.jpress.core.interceptor.JI18nInterceptor;
 import io.jpress.core.render.JErrorRenderFactory;
 import io.jpress.core.render.JpressRenderFactory;
 import io.jpress.interceptor.AdminInterceptor;
-import io.jpress.interceptor.GlobelInterceptor;
+import io.jpress.interceptor.GlobalInterceptor;
 import io.jpress.message.plugin.MessagePlugin;
+import io.jpress.model.core.JModelMapping;
 import io.jpress.model.core.Table;
 import io.jpress.plugin.search.SearcherPlugin;
 import io.jpress.router.RouterMapping;
@@ -70,8 +71,6 @@ public abstract class JpressConfig extends JFinalConfig {
 		log.info("JPress is starting ...");
 
 		PropKit.use("jpress.properties");
-
-		DbDialectFactory.init();
 
 		constants.setDevMode(PropKit.getBoolean("dev_mode", false));
 		constants.setViewType(ViewType.FREE_MARKER);
@@ -107,10 +106,16 @@ public abstract class JpressConfig extends JFinalConfig {
 
 		if (Jpress.isInstalled()) {
 
+			JCachePlugin leCachePlugin = new JCachePlugin();
+			plugins.add(leCachePlugin);
+
 			DruidPlugin druidPlugin = createDruidPlugin();
 			plugins.add(druidPlugin);
 
 			ActiveRecordPlugin activeRecordPlugin = createRecordPlugin(druidPlugin);
+			activeRecordPlugin.setCache(leCachePlugin.getCache());
+			activeRecordPlugin.setShowSql(JFinal.me().getConstants().getDevMode());
+
 			plugins.add(activeRecordPlugin);
 
 			plugins.add(new SearcherPlugin());
@@ -120,7 +125,7 @@ public abstract class JpressConfig extends JFinalConfig {
 	}
 
 	public EhCachePlugin createEhCachePlugin() {
-		String ehcacheDiskStorePath = PathKit.getWebRootPath();
+		String ehcacheDiskStorePath = PathKit.getRootClassPath();
 		File pathFile = new File(ehcacheDiskStorePath, ".ehcache");
 
 		Configuration cfg = ConfigurationFactory.parseConfiguration();
@@ -140,8 +145,15 @@ public abstract class JpressConfig extends JFinalConfig {
 		String db_user = dbProp.get("db_user").trim();
 		String db_password = dbProp.get("db_password").trim();
 
-		return DbDialectFactory.getDbDialect().createDuidPlugin(db_host, db_host_port, db_name, db_user, db_password);
+		String jdbc_url = "jdbc:mysql://" + db_host + ":" + db_host_port + "/" + db_name + "?" + "useUnicode=true&"
+				+ "characterEncoding=utf8&" + "zeroDateTimeBehavior=convertToNull";
+
+		DruidPlugin druidPlugin = new DruidPlugin(jdbc_url, db_user, db_password);
+		druidPlugin.addFilter(new StatFilter());
+
+		return druidPlugin;
 	}
+	
 
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	public ActiveRecordPlugin createRecordPlugin(IDataSourceProvider dsp) {
@@ -161,17 +173,15 @@ public abstract class JpressConfig extends JFinalConfig {
 					arPlugin.addMapping(tname, (Class<? extends Model<?>>) clazz);
 				}
 
-				DbDialect.mapping(clazz.getSimpleName().toLowerCase(), tname);
+				JModelMapping.me().mapping(clazz.getSimpleName().toLowerCase(), tname);
 			}
 		}
-
-		arPlugin.setShowSql(JFinal.me().getConstants().getDevMode());
 		return arPlugin;
 	}
 
 	public void configInterceptor(Interceptors interceptors) {
 		interceptors.add(new JI18nInterceptor());
-		interceptors.add(new GlobelInterceptor());
+		interceptors.add(new GlobalInterceptor());
 		interceptors.add(new AdminInterceptor());
 		interceptors.add(new HookInterceptor());
 	}
@@ -213,6 +223,5 @@ public abstract class JpressConfig extends JFinalConfig {
 
 	public void onJPressStarted() {
 	};
-
 
 }

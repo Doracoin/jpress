@@ -37,8 +37,8 @@ import io.jpress.model.query.MappingQuery;
 import io.jpress.model.query.MetaDataQuery;
 import io.jpress.model.query.TaxonomyQuery;
 import io.jpress.model.query.UserQuery;
-import io.jpress.model.utils.ContentRouter;
-import io.jpress.model.utils.PageRouter;
+import io.jpress.model.router.ContentRouter;
+import io.jpress.model.router.PageRouter;
 import io.jpress.template.TemplateManager;
 import io.jpress.template.Thumbnail;
 import io.jpress.utils.JsoupUtils;
@@ -108,7 +108,7 @@ public class Content extends BaseContent<Content> implements ISortModel<Content>
 
 	@Override
 	public boolean delete() {
-		
+
 		removeCache(getId());
 		removeCache(getSlug());
 
